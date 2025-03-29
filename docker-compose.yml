@@ -38,10 +38,7 @@ services:
       # - Make index page to be forbidden.
       # - Set CouchDB into subdirectory
       caddy.handle_path: /*
-      caddy.handle_path.0_respond: "\"\" 403"
-      caddy.handle_path.0_header.-Server: ""
-      caddy.handle_path_1: /home/*
-      caddy.handle_path_1.0_reverse_proxy: "{{upstreams 5678}}"
+      caddy.handle_path.0_reverse_proxy: "{{upstreams 5678}}"
     restart: always
 
 volumes:
