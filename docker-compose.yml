@@ -13,7 +13,7 @@ services:
       - tailscale-caddy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock
+      - /tmp/tailscaled.sock:/var/run/tailscale/tailscaled.sock
       - caddy:/data
     restart: always
     depends_on:
@@ -37,8 +37,6 @@ services:
     init: true
     networks:
      - tailscale-caddy
-    # Ensure Caddy can access the tailscale socket, Caddy expects it to be under /var/run/tailscale so make a symlink
-    command: sh -c "mkdir --parents /var/run/tailscale && ln -s /tmp/tailscaled.sock /var/run/tailscale/tailscaled.sock && /usr/local/bin/containerboot"
 
   n8n:
     image: docker.n8n.io/n8nio/n8n

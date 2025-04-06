@@ -13,5 +13,6 @@ cd n8n-docker-caddy
 docker volume create caddy 
 docker volume create tailscale 
 docker volume create n8n
-
+docker network create tailscale-caddy
+docker compose up -d
 ```
