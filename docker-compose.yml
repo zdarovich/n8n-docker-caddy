@@ -1,19 +1,27 @@
 version: "3.7"
 
 services:
-  caddy:
-    image: caddy:latest
-    container_name: caddy
+  traefik:
+    image: traefik:latest
+    container_name: traefik
     ports:
       - 80:80
       - 443:443
     networks:
-      - tailscale-caddy
+      - tailscale-traefik
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      # Access to Tailscale files for cert generation.
+      - ./tailscale/data:/var/lib/tailscale:rw
+      # Access to Tailscale socket for cert generation.
       - /tmp/tailscaled.sock:/var/run/tailscale/tailscaled.sock
-      - caddy:/data
-      - ./conf/Caddyfile:/etc/caddy/Caddyfile
+      - traefik:/etc/traefik
+    command:
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --certificatesresolvers.tailscalecert.tailscale=true
     restart: always
     depends_on:
       # wait for tailscale to boot
@@ -25,7 +33,7 @@ services:
     container_name: tailscale
     volumes:
       - tailscale:/var/lib/tailscale # Persist the tailscale state directory
-      - /tmp:/tmp # Share the tmp directory for the socket
+      - /tmp/tailscaled.sock:/tmp/tailscaled.sock # Share the tmp directory for the socket
     environment:
       - TS_HOSTNAME=${TS_HOSTNAME} 	# Hostname you want this instance to have on the tailscale network
       - TS_TAILNET=${TS_TAILNET}         # Your tailnet name without the .ts.net suffix!
@@ -34,15 +42,17 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_AUTH_ONCE=true
     restart: always
-    init: true
+    cap_add:
+      - net_admin
+      - sys_module
     networks:
-     - tailscale-caddy
+     - tailscale-traefik
 
   n8n:
     image: docker.n8n.io/n8nio/n8n
     container_name: n8n
-    ports:
-      - 5678:5678
+    expose:
+      - 5678
     environment:
       - N8N_HOST=${TS_HOSTNAME}.${TS_TAILNET}.ts.net
       - N8N_PORT=5678
@@ -54,18 +64,24 @@ services:
       - n8n:/home/node/.n8n
       - ./local_files:/files
     networks:
-      - tailscale-caddy
+      - tailscale-traefik
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.n8n.rule=Host(`${TS_HOSTNAME}.${TS_TAILNET}.ts.net`)
+      - traefik.http.routers.n8n.entrypoints=websecure
+      - traefik.http.routers.n8n.tls=true
+      - traefik.http.routers.n8n.tls.certresolver=tailscalecert
+      - traefik.http.services.n8n.loadbalancer.server.port=5678
     restart: always
     
 volumes:
-  caddy:
-    external: true
   tailscale:
-    external: true
+    external: false
+  traefik:
+    external: false
   n8n:
-    external: true
-
+    external: false
 
 networks:
-  tailscale-caddy:
-    external: true
+  tailscale-traefik:
+    external: false
