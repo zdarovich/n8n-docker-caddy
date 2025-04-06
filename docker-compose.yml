@@ -7,17 +7,13 @@ services:
     ports:
       - 80:80
       - 443:443
-    environment:
-      - TS_HOSTNAME=${TS_HOSTNAME}
-      - TS_TAILNET=${TS_TAILNET}
-      - CADDY_TARGET=n8n:5678
     networks:
       - tailscale-caddy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/tailscaled.sock:/var/run/tailscale/tailscaled.sock
       - caddy:/data
-    command: sh -c "echo $TS_HOSTNAME'.'$TS_TAILNET'.ts.net' > /etc/caddy/Caddyfile && echo 'reverse_proxy' $CADDY_TARGET >> /etc/caddy/Caddyfile && caddy run --config /etc/caddy/Caddyfile"
+      - ./conf/Caddyfile:/etc/caddy/Caddyfile
     restart: always
     depends_on:
       # wait for tailscale to boot
@@ -37,7 +33,6 @@ services:
       - TS_USERSPACE=true
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_AUTH_ONCE=true
-      - TS_PERMIT_CERT_UID=caddy
     restart: always
     init: true
     networks:
