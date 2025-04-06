@@ -11,10 +11,9 @@ services:
       - tailscale-traefik
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      # Access to Tailscale files for cert generation.
-      - ./tailscale/data:/var/lib/tailscale:rw
-      # Access to Tailscale socket for cert generation.
-      - /tmp/tailscaled.sock:/var/run/tailscale/tailscaled.sock
+      # Access to Tailscale socket for cert generation
+      - tailscale-sock:/var/run/tailscale:ro
+      - tailscale:/var/lib/tailscale
       - traefik:/etc/traefik
     command:
       - --entrypoints.web.address=:80
@@ -33,7 +32,7 @@ services:
     container_name: tailscale
     volumes:
       - tailscale:/var/lib/tailscale # Persist the tailscale state directory
-      - /tmp/tailscaled.sock:/tmp/tailscaled.sock # Share the tmp directory for the socket
+      - tailscale-sock:/var/run/tailscale # Use a dedicated volume for the socket
     environment:
       - TS_HOSTNAME=${TS_HOSTNAME} 	# Hostname you want this instance to have on the tailscale network
       - TS_TAILNET=${TS_TAILNET}         # Your tailnet name without the .ts.net suffix!
@@ -41,10 +40,9 @@ services:
       - TS_USERSPACE=true
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_AUTH_ONCE=true
+      - TS_SOCKET=/var/run/tailscale/tailscaled.sock # Specify custom socket path
     restart: always
-    cap_add:
-      - net_admin
-      - sys_module
+    init: true
     networks:
      - tailscale-traefik
 
@@ -76,6 +74,8 @@ services:
     
 volumes:
   tailscale:
+    external: false
+  tailscale-sock:
     external: false
   traefik:
     external: false
