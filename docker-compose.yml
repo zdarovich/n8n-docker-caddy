@@ -2,34 +2,75 @@ version: "3.7"
 
 services:
   caddy:
-    image: caddy:latest
-    restart: unless-stopped
+    image: lucaslorentz/caddy-docker-proxy:ci-alpine
+    container_name: caddy
     ports:
-      - "80:80"
-      - "443:443"
+      - 80:80
+      - 443:443
+    environment:
+      - CADDY_INGRESS_NETWORKS=tailscale-caddy
+    networks:
+      - tailscale-caddy
     volumes:
-      - caddy_data:/data
-      - ${DATA_FOLDER}/caddy_config:/config
-      - ${DATA_FOLDER}/caddy_config/Caddyfile:/etc/caddy/Caddyfile
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock
+      - caddy:/data
+    restart: always
+    depends_on:
+      # wait for tailscale to boot
+      # to communicate to it using the tailscaled.sock
+      - tailscale
+
+  tailscale:
+    image: tailscale/tailscale:latest
+    volumes:
+      - tailscale:/var/lib/tailscale # Persist the tailscale state directory
+      - /tmp:/tmp # Share the tmp directory for the socket
+    environment:
+      - TS_HOSTNAME=${TS_HOSTNAME} 	# Hostname you want this instance to have on the tailscale network
+      - TS_TAILNET=${TS_TAILNET}         # Your tailnet name without the .ts.net suffix!
+      - TS_AUTH_KEY=${TS_AUTH_KEY}
+      - TS_USERSPACE=true
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_AUTH_ONCE=true
+    restart: always
+    init: true
+    networks:
+     - tailscale-caddy
+    # Ensure Caddy can access the tailscale socket, Caddy expects it to be under /var/run/tailscale so make a symlink
+    command: sh -c "mkdir --parents /var/run/tailscale && ln -s /tmp/tailscaled.sock /var/run/tailscale/tailscaled.sock && /usr/local/bin/containerboot"
 
   n8n:
     image: docker.n8n.io/n8nio/n8n
-    restart: always
     ports:
       - 5678:5678
     environment:
-      - N8N_HOST=${SUBDOMAIN}.${DOMAIN_NAME}
+      - N8N_HOST=${TS_HOSTNAME}.${TS_TAILNET}.ts.net
       - N8N_PORT=5678
       - N8N_PROTOCOL=https
       - NODE_ENV=production
-      - WEBHOOK_URL=https://${SUBDOMAIN}.${DOMAIN_NAME}/
+      - WEBHOOK_URL=https://${TS_HOSTNAME}.${TS_TAILNET}.ts.net/
       - GENERIC_TIMEZONE=${GENERIC_TIMEZONE}
     volumes:
-      - n8n_data:/home/node/.n8n
-      - ${DATA_FOLDER}/local_files:/files
-      
+      - n8n:/home/node/.n8n
+      - ./local_files:/files
+    networks:
+      - tailscale-caddy
+    labels:
+      caddy: ${TS_HOSTNAME}.${TS_TAILNET}.ts.net
+      caddy.handle_path: /*
+      caddy.handle_path.0_reverse_proxy: "{{upstreams 5678}}"
+    restart: always
+    
 volumes:
-  caddy_data:
+  caddy:
     external: true
-  n8n_data:
+  tailscale:
+    external: true
+  n8n:
+    external: true
+
+
+networks:
+  tailscale-caddy:
     external: true
